@@ -273,6 +273,9 @@ impl Tello {
     pub fn send_command(&self, command: &str, acked: bool) -> Result<usize, TelloError> {
         //! send a direct command, blocks while waiting for response
         //! DO NOT USE IT UNLESS TOLD TO
+        if command.contains("wifi") {
+            return Ok(0)
+        }
         {
             let mutex = self.command_socket.clone();
             let socket = mutex.lock().unwrap();
@@ -307,11 +310,6 @@ impl Tello {
     pub fn get_running(&self) -> bool {
         //! get whether or not the drone is running
         self.running.load(Ordering::Relaxed)
-    }
-
-    #[getter(acked)]
-    pub fn get_acked(&self) -> bool {
-        self.drone_acked.load(Ordering::Relaxed)
     }
 
     pub fn take_off(&self) -> Result<usize, TelloError> {
@@ -429,8 +427,10 @@ impl Tello {
         self.send_command(format!("speed {}", speed_cms).as_str(), true)
     }
 
+    /*
     pub fn wifi(&self, ssid: &str, password: &str) -> Result<usize, TelloError> {
         //! changes the wifi name/password, if you change the password we will kill you
         self.send_command(format!("wifi {} {}", ssid, password).as_str(), true)
     }
+    */
 }
