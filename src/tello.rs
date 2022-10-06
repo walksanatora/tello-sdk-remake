@@ -52,6 +52,70 @@ impl State {
             ground_acceleration_z: 0.0,
         }
     }
+    #[getter(roll)]
+    pub fn get_roll(&self)->i16 {
+        self.roll
+    }
+    #[getter(pitch)]
+    pub fn get_pitch(&self)->i16 {
+        self.pitch
+    }
+    #[getter(yaw)]
+    pub fn get_yaw(&self)->i16 {
+        self.yaw
+    }
+    #[getter(ground_velocity_x)]
+    pub fn get_velocity_x(&self)->i16 {
+        self.ground_velocity_x
+    }
+    #[getter(ground_velocity_y)]
+    pub fn get_velocity_y(&self)->i16 {
+        self.ground_velocity_y
+    }
+    #[getter(ground_velocity_z)]
+    pub fn get_velocity_z(&self)->i16 {
+        self.ground_velocity_z
+    }
+    #[getter(temperature_minimum)]
+    pub fn get_teperature_min(&self)->u8 {
+        self.temperature_minimum
+    }
+    #[getter(temperature_maximum)]
+    pub fn get_teperature_max(&self)->u8 {
+        self.temperature_maximum
+    }
+    #[getter(tof_distance)]
+    pub fn get_teperature_mix(&self)->u8 {
+        self.temperature_minimum
+    }
+    #[getter(height)]
+    pub fn get_height(&self)->i16 {
+        self.height
+    }
+    #[getter(battery_percentage)]
+    pub fn get_battery(&self)->u8 {
+        self.battery_percentage
+    }
+    #[getter(barometer_height)]
+    pub fn get_barometer_height(&self)->f32 {
+        self.barometer_height
+    }
+    #[getter(time)]
+    pub fn get_time(&self)->u16 {
+        self.time
+    }
+    #[getter(ground_accleration_x)]
+    pub fn get_accel_x(&self)->f32 {
+        self.ground_acceleration_x
+    }
+    #[getter(ground_accleration_y)]
+    pub fn get_accel_y(&self)->f32 {
+        self.ground_acceleration_y
+    }
+    #[getter(ground_accleration_z)]
+    pub fn get_accel_z(&self)->f32 {
+        self.ground_acceleration_z
+    }
 }
 
 /// A Class representing a Tello Drone
@@ -233,9 +297,21 @@ impl Tello {
         Err(TelloError::AckNotReceived)
     }
 
+    #[getter(state)]
     pub fn get_state(&self) -> State {
         //! get the state of the drone and return it
         return *self.state.lock().unwrap();
+    }
+
+    #[getter(running)]
+    pub fn get_running(&self) -> bool {
+        //! get whether or not the drone is running
+        self.running.load(Ordering::Relaxed)
+    }
+
+    #[getter(acked)]
+    pub fn get_acked(&self) -> bool {
+        self.drone_acked.load(Ordering::Relaxed)
     }
 
     pub fn take_off(&self) -> Result<usize, TelloError> {
