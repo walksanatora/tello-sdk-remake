@@ -191,7 +191,7 @@ impl Tello {
             state: Arc::new(Mutex::new(State::new())),
             drone_acked: Arc::new(AtomicBool::new(false)),
             response: Arc::new(Mutex::new(String::new())),
-            max_ack_ms: 1000
+            max_ack_ms: 10000
         })
     }
 
@@ -311,12 +311,19 @@ impl Tello {
         while now.elapsed() < Duration::from_millis(self.max_ack_ms) {
             if sending_acked.load(Ordering::SeqCst) {
                 sending_acked.store(false, Ordering::SeqCst);
-                return Ok(self.response.lock().unwrap().to_string());
+                let result = self.response.lock().unwrap();
+                return if result.contains("error") {
+                    Err(TelloErr::new_err(format!("response is \"error\"\n{}",result)))
+                } else if result.contains("unactive") {
+                    Err(TelloErr::new_err(format!("repsonse is \"unactive\"\n{}",result)))
+                } else {
+                    Ok(result.to_string())
+                }
             }
 
             std::thread::sleep(Duration::from_millis(50));
         }
-        Err(TelloErr::new_err("Acknowledgement not recieved"))
+        Err(TelloErr::new_err("response not recieved within time limit"))
     }
 
     #[getter(state)]
