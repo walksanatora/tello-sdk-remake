@@ -5,8 +5,10 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
+
+pyo3::create_exception!(tello_sdk,TelloErr,PyException);
 
 #[derive(Copy, Clone)]
 #[pyclass]
@@ -140,18 +142,20 @@ pub enum Flip {
     Backward,
 }
 
-
+/*
 #[derive(Debug)]
-pub enum TelloError {
+pub enum TelloErr {
     IO(std::io::Error),
-    AckNotReceived
+    AckNotReceived,
+    DroneCommandError,
 }
 
-impl From<TelloError> for PyErr {
-    fn from(err: TelloError) -> PyErr {
+impl From<TelloErr> for PyErr {
+    fn from(err: TelloErr) -> PyErr {
         PyRuntimeError::new_err(format!("{:?}",err))
     }
 }
+*/
 
 impl Flip {
     fn value(self) -> char {
@@ -191,7 +195,7 @@ impl Tello {
         })
     }
 
-    pub fn connect(&mut self) -> Result<String,TelloError> {
+    pub fn connect(&mut self) -> Result<String, PyErr> {
         //! connects to the drone
         //! also setups the async threads for allowing values to change
         //! errors if the drone does not respond in a set ammount of time
@@ -282,7 +286,7 @@ impl Tello {
         self.command_thread = None;
     }
 
-    pub fn send_command(&self, command: &str, acked: bool) -> Result<String, TelloError> {
+    pub fn send_command(&self, command: &str, acked: bool) -> Result<String, PyErr> {
         //! send a direct command, blocks while waiting for response
         //! DO NOT USE IT UNLESS TOLD TO
         println!("calling command '{}'",command);
@@ -294,7 +298,8 @@ impl Tello {
             let mutex = self.command_socket.clone();
             let socket = mutex.lock().unwrap();
             #[allow(clippy::redundant_closure)]
-            socket.send_to(command.as_bytes(), "192.168.10.1:8889").map_err(|err| TelloError::IO(err))?;
+            let e = socket.send_to(command.as_bytes(), "192.168.10.1:8889").map_err(|err| TelloErr::new_err(err));
+            if let Err(er) = e {return Err(er)} 
         }
 
         if !acked {
@@ -311,7 +316,7 @@ impl Tello {
 
             std::thread::sleep(Duration::from_millis(50));
         }
-        Err(TelloError::AckNotReceived)
+        Err(TelloErr::new_err("Acknowledgement not recieved"))
     }
 
     #[getter(state)]
@@ -345,76 +350,76 @@ impl Tello {
         }
     }
 
-    pub fn take_off(&self) -> Result<String, TelloError> {
+    pub fn take_off(&self) -> Result<String, PyErr> {
         //! perform the automatic takeoff
         self.send_command("takeoff", false)
     }
 
-    pub fn land(&self) -> Result<String, TelloError> {
+    pub fn land(&self) -> Result<String, PyErr> {
         //! perform the automated landing
         self.send_command("land", false)
     }
 
-    pub fn stream_on(&self) -> Result<String, TelloError> {
+    pub fn stream_on(&self) -> Result<String, PyErr> {
         //! start capturing data from the camera
         self.send_command("streamon", true)
     }
 
-    pub fn stream_off(&self) -> Result<String, TelloError> {
+    pub fn stream_off(&self) -> Result<String, PyErr> {
         //! stop capturing data from the camera
         self.send_command("streamoff", true)
     }
 
-    pub fn emergency(&self) -> Result<String, TelloError> {
+    pub fn emergency(&self) -> Result<String, PyErr> {
         //! immedietly turn off all the propellers
         self.send_command("emergency", true)
     }
 
-    pub fn up(&self, distance_cm: u16) -> Result<String, TelloError> {
+    pub fn up(&self, distance_cm: u16) -> Result<String, PyErr> {
         //! move the drone up the specified distance in cm
         self.send_command(format!("up {}", distance_cm).as_str(), true)
     }
 
-    pub fn down(&self, distance_cm: u16) -> Result<String, TelloError> {
+    pub fn down(&self, distance_cm: u16) -> Result<String, PyErr> {
         //! move the drone down the specified distance in cm
         self.send_command(format!("down {}", distance_cm).as_str(), true)
     }
 
-    pub fn left(&self, distance_cm: u16) -> Result<String, TelloError> {
+    pub fn left(&self, distance_cm: u16) -> Result<String, PyErr> {
         //! move the drone left the specified distance in cm
         self.send_command(format!("left {}", distance_cm).as_str(), true)
     }
 
-    pub fn right(&self, distance_cm: u16) -> Result<String, TelloError> {
+    pub fn right(&self, distance_cm: u16) -> Result<String, PyErr> {
         //! move the drone right the specified distance in cm
         self.send_command(format!("right {}", distance_cm).as_str(), true)
     }
 
-    pub fn forward(&self, distance_cm: u16) -> Result<String, TelloError> {
+    pub fn forward(&self, distance_cm: u16) -> Result<String, PyErr> {
         //! move the drone forward the specified distance in cm
         self.send_command(format!("forward {}", distance_cm).as_str(), true)
     }
 
-    pub fn back(&self, distance_cm: u16) -> Result<String, TelloError> {
+    pub fn back(&self, distance_cm: u16) -> Result<String, PyErr> {
         //! move the back down the specified distance in cm
         self.send_command(format!("back {}", distance_cm).as_str(), true)
     }
 
-    pub fn cw(&self, angle_millidegs: u16) -> Result<String, TelloError> {
+    pub fn cw(&self, angle_millidegs: u16) -> Result<String, PyErr> {
         //! rotate the drone a specified milidegres(0.001 degrees) clockwise
         self.send_command(format!("cw {}", angle_millidegs).as_str(), true)
     }
 
-    pub fn ccw(&self, angle_millidegs: u16) -> Result<String, TelloError> {
+    pub fn ccw(&self, angle_millidegs: u16) -> Result<String, PyErr> {
         //! rotate the drone a specified milidegres(0.001 degrees) counter-clockwise
         self.send_command(format!("ccw {}", angle_millidegs).as_str(), true)
     }
 
-    pub fn flip(&self, flip: Flip) -> Result<String, TelloError> {
+    pub fn flip(&self, flip: Flip) -> Result<String, PyErr> {
         self.send_command(format!("flip {}", flip.value()).as_str(), true)
     }
 
-    pub fn go(&self, x_cm: u16, y_cm: u16, z_cm: u16, speed: u8) -> Result<String, TelloError> {
+    pub fn go(&self, x_cm: u16, y_cm: u16, z_cm: u16, speed: u8) -> Result<String, PyErr> {
         //! go to a relative position to the drone, limited to a 1000x1000 cm cube centered on the drone
         //! also includes a speed
         self.send_command(format!("go {} {} {} {}", x_cm, y_cm, z_cm, speed).as_str(), true)
@@ -430,7 +435,7 @@ impl Tello {
         y2_cm: u16,
         z2_cm: u16,
         speed: u8,
-    ) -> Result<String, TelloError> {
+    ) -> Result<String, PyErr> {
         //! (i had to silence format warnings)
         //! curves around from point 1 to point 2
         self.send_command(
@@ -448,20 +453,20 @@ impl Tello {
         forward_backward: i8,
         up_down: i8,
         yaw: i8,
-    ) -> Result<String, TelloError> {
+    ) -> Result<String, PyErr> {
         //! simulated remote controll inputs
         self.send_command(
             format!("rc {} {} {} {}", left_right, forward_backward, up_down, yaw).as_str(), false
         )
     }
 
-    pub fn speed(&self, speed_cms: u8) -> Result<String, TelloError> {
+    pub fn speed(&self, speed_cms: u8) -> Result<String, PyErr> {
         //! sets the speed for many other commands
         self.send_command(format!("speed {}", speed_cms).as_str(), true)
     }
 
     /*
-    pub fn wifi(&self, ssid: &str, password: &str) -> Result<String, TelloError> {
+    pub fn wifi(&self, ssid: &str, password: &str) -> Result<String, PyErr> {
         //! changes the wifi name/password, if you change the password we will kill you
         self.send_command(format!("wifi {} {}", ssid, password).as_str(), true)
     }
