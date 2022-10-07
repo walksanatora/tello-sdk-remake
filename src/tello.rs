@@ -333,7 +333,11 @@ impl Tello {
     }
 
     fn __repr__(&self) -> String {
-        format!("<Tello {}%, timeout: {}>",self.get_state().battery_percentage, self.max_ack_ms)
+        if self.get_running() {
+            format!("<Tello {}%, timeout: {}>",self.get_state().battery_percentage, self.max_ack_ms)
+        } else {
+            "<Tello not connected>".to_string()
+        }
     }
 
     pub fn take_off(&self) -> Result<usize, TelloError> {
