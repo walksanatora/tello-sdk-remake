@@ -1,8 +1,26 @@
 class State:
-	pass
+	roll: int
+	pitch: int
+	yaw: int
+	ground_velocity_x: int
+	ground_velocity_y: int
+	ground_velocity_z: int
+	temperature_minimum: int
+	temperature_maximum: int
+	tof_value: int
+	height: int
+	battery_percentage: int
+	barometer_height: float
+	time: int
+	ground_acceleration_x: int
+	ground_acceleration_y: int
+	ground_acceleration_z: int
 
 class Flip:
-	pass
+	Left: Flip
+	Right: Flip
+	Forward: Flip
+	Backward: Flip
 
 class Tello:
 	state: State
