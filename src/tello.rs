@@ -128,6 +128,7 @@ pub struct Tello {
     running: Arc<AtomicBool>,
     state: Arc<Mutex<State>>,
     drone_acked: Arc<AtomicBool>,
+    max_ack_ms: u64
 }
 #[pyclass]
 #[derive(Clone,Copy)]
@@ -168,9 +169,11 @@ impl Tello {
     /// errors if the sockets cannot be unblocked
     #[new]
     pub fn new() -> Result<Self,std::io::Error> {
-        let command_socket = UdpSocket::bind("0.0.0.0:9009")?;
+        println!("binding sockets");
+        let command_socket = UdpSocket::bind("0.0.0.0:8889")?;
         let state_socket = UdpSocket::bind("0.0.0.0:8890")?;
 
+        println!("unblocking sockets");
         command_socket.set_nonblocking(true)?;
         state_socket.set_nonblocking(true)?;
 
@@ -182,6 +185,7 @@ impl Tello {
             running: Arc::new(AtomicBool::new(false)),
             state: Arc::new(Mutex::new(State::new())),
             drone_acked: Arc::new(AtomicBool::new(false)),
+            max_ack_ms: 1000
         })
     }
 
@@ -190,8 +194,10 @@ impl Tello {
         //! also setups the async threads for allowing values to change
         //! errors if the drone does not respond in a set ammount of time
         //! or some other std::io::Error (rust)
+        println!("connecting");
         self.running.store(true, Ordering::SeqCst);
 
+        println!("starting command reciever thread");
         let command_running = self.running.clone();
         let command_socket = self.command_socket.clone();
         let command_acked = self.drone_acked.clone();
@@ -215,6 +221,7 @@ impl Tello {
             }
         }));
 
+        println!("starting state reciever thread");
         let state_running = self.running.clone();
         let state_socket = self.state_socket.clone();
         let state = self.state.clone();
@@ -228,6 +235,7 @@ impl Tello {
                         let string = std::str::from_utf8(&buffer[..size - 1])
                             .unwrap_or_default()
                             .trim();
+                        println!("recieved status {}",string);
                         let parts: Vec<&str> = string.split(';').collect();
                         let mut parameter_map: HashMap<&str, &str> = HashMap::new();
                         for parameter in &parts {
@@ -273,8 +281,10 @@ impl Tello {
     pub fn send_command(&self, command: &str, acked: bool) -> Result<usize, TelloError> {
         //! send a direct command, blocks while waiting for response
         //! DO NOT USE IT UNLESS TOLD TO
+        println!("calling command '{}'",command);
         if command.contains("wifi") {
-            return Ok(0)
+            self.land()?;
+            panic!("attempted to call wifi command, drone landed");
         }
         {
             let mutex = self.command_socket.clone();
@@ -289,7 +299,7 @@ impl Tello {
 
         let sending_acked = self.drone_acked.clone();
         let now = Instant::now();
-        while now.elapsed() < Duration::from_millis(10000) {
+        while now.elapsed() < Duration::from_millis(self.max_ack_ms) {
             if sending_acked.load(Ordering::SeqCst) {
                 sending_acked.store(false, Ordering::SeqCst);
                 return Ok(command.len());
@@ -310,6 +320,20 @@ impl Tello {
     pub fn get_running(&self) -> bool {
         //! get whether or not the drone is running
         self.running.load(Ordering::Relaxed)
+    }
+
+    #[getter(ack_ms)]
+    pub fn get_ack_ms(&self) -> u64 {
+        self.max_ack_ms
+    }
+
+    #[setter(ack_ms)]
+    pub fn set_ack_ms(&mut self,new: u64) {
+        self.max_ack_ms = new;
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<Tello {}%, timeout: {}>",self.get_state().battery_percentage, self.max_ack_ms)
     }
 
     pub fn take_off(&self) -> Result<usize, TelloError> {
