@@ -337,6 +337,7 @@ impl Tello {
     }
 
     fn __repr__(&self) -> String {
+        //! python __repr__ to allow better formatting
         if self.get_running() {
             format!("<Tello {}%, timeout: {}>",self.get_state().battery_percentage, self.max_ack_ms)
         } else {
