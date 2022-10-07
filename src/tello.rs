@@ -11,7 +11,7 @@ use pyo3::prelude::*;
 pyo3::create_exception!(tello_sdk,TelloErr,PyException);
 
 #[derive(Copy, Clone)]
-#[pyclass]
+#[pyclass(module = "tello_sdk", frozen)]
 pub struct State {
     pub roll: i16,
     pub pitch: i16,
@@ -121,7 +121,7 @@ impl State {
 }
 
 /// A Class representing a Tello Drone
-#[pyclass]
+#[pyclass(module = "tello_sdk", subclass)]
 pub struct Tello {
     command_socket: Arc<Mutex<UdpSocket>>,
     state_socket: Arc<Mutex<UdpSocket>>,
@@ -133,7 +133,7 @@ pub struct Tello {
     response: Arc<Mutex<String>>,
     max_ack_ms: u64
 }
-#[pyclass]
+#[pyclass(module = "tello_sdk")]
 #[derive(Clone,Copy)]
 pub enum Flip {
     Left,
@@ -141,21 +141,6 @@ pub enum Flip {
     Forward,
     Backward,
 }
-
-/*
-#[derive(Debug)]
-pub enum TelloErr {
-    IO(std::io::Error),
-    AckNotReceived,
-    DroneCommandError,
-}
-
-impl From<TelloErr> for PyErr {
-    fn from(err: TelloErr) -> PyErr {
-        PyRuntimeError::new_err(format!("{:?}",err))
-    }
-}
-*/
 
 impl Flip {
     fn value(self) -> char {
