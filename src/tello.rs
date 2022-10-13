@@ -54,6 +54,9 @@ impl State {
             ground_acceleration_z: 0.0,
         }
     }
+    pub fn err(&self) -> Result<(),PyErr> {
+        Err(TelloErr::new_err("test_err"))
+    }
     #[getter(roll)]
     pub fn get_roll(&self)->i16 {
         self.roll
@@ -131,7 +134,8 @@ pub struct Tello {
     state: Arc<Mutex<State>>,
     drone_acked: Arc<AtomicBool>,
     response: Arc<Mutex<String>>,
-    max_ack_ms: u64
+    max_ack_ms: u64,
+    has_robo: bool
 }
 #[pyclass(module = "tello_sdk")]
 #[derive(Clone,Copy)]
@@ -159,10 +163,12 @@ impl Tello {
     /// errors if the sockets cannot be unblocked
     #[new]
     pub fn new() -> Result<Self,std::io::Error> {
+        #[cfg(debug_assertions)]
         println!("binding sockets");
         let command_socket = UdpSocket::bind("0.0.0.0:8889")?;
         let state_socket = UdpSocket::bind("0.0.0.0:8890")?;
 
+        #[cfg(debug_assertions)]
         println!("unblocking sockets");
         command_socket.set_nonblocking(true)?;
         state_socket.set_nonblocking(true)?;
@@ -176,7 +182,8 @@ impl Tello {
             state: Arc::new(Mutex::new(State::new())),
             drone_acked: Arc::new(AtomicBool::new(false)),
             response: Arc::new(Mutex::new(String::new())),
-            max_ack_ms: 10000
+            max_ack_ms: 10000,
+            has_robo: false
         })
     }
 
@@ -185,9 +192,11 @@ impl Tello {
         //! also setups the async threads for allowing values to change
         //! errors if the drone does not respond in a set ammount of time
         //! or some other std::io::Error (rust)
+        #[cfg(debug_assertions)]
         println!("connecting");
         self.running.store(true, Ordering::SeqCst);
 
+        #[cfg(debug_assertions)]
         println!("starting command reciever thread");
         let command_running = self.running.clone();
         let command_socket = self.command_socket.clone();
@@ -214,6 +223,7 @@ impl Tello {
             }
         }));
 
+        #[cfg(debug_assertions)]
         println!("starting state reciever thread");
         let state_running = self.running.clone();
         let state_socket = self.state_socket.clone();
@@ -228,7 +238,6 @@ impl Tello {
                         let string = std::str::from_utf8(&buffer[..size - 1])
                             .unwrap_or_default()
                             .trim();
-                        println!("recieved status {}",string);
                         let parts: Vec<&str> = string.split(';').collect();
                         let mut parameter_map: HashMap<&str, &str> = HashMap::new();
                         for parameter in &parts {
@@ -261,7 +270,15 @@ impl Tello {
             }
         }));
 
-        self.send_command("command", true)
+        
+        drop(self.send_command("command", true));
+
+        let hardware = self.send_command("hardware?",true);
+        if let Ok(hw) = hardware {
+            self.has_robo = hw == "RMTT";
+        };
+        Ok("ok".to_string())
+
     }
 
     pub fn disconnect(&mut self) {
@@ -274,6 +291,7 @@ impl Tello {
     pub fn send_command(&self, command: &str, acked: bool) -> Result<String, PyErr> {
         //! send a direct command, blocks while waiting for response
         //! DO NOT USE IT UNLESS TOLD TO
+        #[cfg(debug_assertions)]
         println!("calling command '{}'",command);
         if command.contains("wifi") {
             self.land()?;
@@ -312,25 +330,30 @@ impl Tello {
     }
 
     #[getter(state)]
-    pub fn get_state(&self) -> State {
+    fn get_state(&self) -> State {
         //! get the state of the drone and return it
         return *self.state.lock().unwrap();
     }
 
     #[getter(running)]
-    pub fn get_running(&self) -> bool {
+    fn get_running(&self) -> bool {
         //! get whether or not the drone is running
         self.running.load(Ordering::Relaxed)
     }
 
     #[getter(ack_ms)]
-    pub fn get_ack_ms(&self) -> u64 {
+    fn get_ack_ms(&self) -> u64 {
         self.max_ack_ms
     }
 
     #[setter(ack_ms)]
-    pub fn set_ack_ms(&mut self,new: u64) {
+    fn set_ack_ms(&mut self,new: u64) {
         self.max_ack_ms = new;
+    }
+
+    #[getter(is_rmtt)]
+    fn is_rmtt(&self) -> bool {
+        self.has_robo
     }
 
     fn __repr__(&self) -> String {
@@ -349,7 +372,7 @@ impl Tello {
 
     pub fn land(&self) -> Result<String, PyErr> {
         //! perform the automated landing
-        self.send_command("land", false)
+        self.send_command("land", true)
     }
 
     pub fn stream_on(&self) -> Result<String, PyErr> {
@@ -456,6 +479,58 @@ impl Tello {
         //! sets the speed for many other commands
         self.send_command(format!("speed {}", speed_cms).as_str(), true)
     }
+
+    pub fn ext_led_color(&self,r: u8,g: u8,b: u8) -> Result<String,PyErr> {
+        if self.has_robo {
+            self.send_command(format!("EXT led {} {} {}",r,g,b).as_str(),false)
+        } else {
+            Err(TelloErr::new_err("RMTT not connected"))
+        }
+    }
+    pub fn ext_led_pulse(&self,r: u8,g: u8,b: u8,rate:f32) -> Result<String,PyErr> {
+        if self.has_robo {
+            self.send_command(format!("EXT led br {} {} {} {}",rate,r,g,b).as_str(),false)
+        } else {
+            Err(TelloErr::new_err("RMTT not connected"))
+        }
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn ext_led_blink(&self,r1: u8,g1: u8,b1: u8,r2: u8,g2: u8,b2: u8,rate:f32) -> Result<String,PyErr> {
+        if self.has_robo {
+            self.send_command(format!("EXT led bl {} {} {} {} {} {} {}",rate,r1,g1,b1,r2,b2,g2).as_str(),false)
+        } else {
+            Err(TelloErr::new_err("RMTT not connected"))
+        }
+    }
+    pub fn ext_matrix_scroll(&self,dir: char,color: char, string: char, rate: f32) -> Result<String,PyErr> {
+        if self.has_robo {
+            self.send_command(format!("EXT mled {} {} {} {}",dir,color,rate,string).as_str(),false)
+        } else {
+            Err(TelloErr::new_err("RMTT not connected"))
+        }
+    } 
+    pub fn ext_matrix_display(&self,colors: String) -> Result<String,PyErr> {
+        if self.has_robo {
+            self.send_command(format!("EXT mled g {}",colors).as_str(),false)
+        } else {
+            Err(TelloErr::new_err("RMTT not connected"))
+        }
+    }
+    pub fn ext_matrix_char(&self,color: char,string: String,rate: f32) -> Result<String,PyErr> {
+        if self.has_robo {
+            self.send_command(format!("EXT mled s {} {} {}",color,rate,string).as_str(),false)
+        } else {
+            Err(TelloErr::new_err("RMTT not connected"))
+        }
+    }
+    pub fn ext_matrix_brightness(&self,brightness: u8) -> Result<String,PyErr> {
+        if self.has_robo {
+            self.send_command(format!("EXT mled sl {}",brightness).as_str(),false)
+        } else {
+            Err(TelloErr::new_err("RMTT not connected"))
+        }
+    }
+    
 
     /*
     pub fn wifi(&self, ssid: &str, password: &str) -> Result<String, PyErr> {

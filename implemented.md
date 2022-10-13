@@ -40,9 +40,34 @@ curve(self,x1,y1,z1,x2,y2,z2,speed)	-- all points are a distance in cm, it curve
 rc(self,left_right,forward_back,up_down,yaw) -- simulate a controller input<br>
 <br>
 
+there are also `ext_` commands which are used when you have the Robot Master connected (the LED matrix)<br>
+(they error if there is no extension)
+ext_led_color(self,r,g,b) -- r,g,b should be in range 0-255<br>
+ext_led_pulse(self,r,g,b,rate) -- the RGB color and the rate (0.1-2.5)Hz<br>
+ext_led_blink(self,r1,g1,b1,r2,b2,g2,rate) -- pulse between RGB1 and RGB2 at (0.1-10)Hz<br>
+ext_matrix_display(self,colors) -- displays colors, colors is a string of colors<br>
+ext_matrix_scroll(self,dir,color,string,rate) -- scrolls a string across the matrix display (0.1-2.5)Hz<br>
+ext_matrix_char(self,color,char) -- displays a single charachter, char is either a letter or "heart"<br>
+ext_matrix_brightness(self,brightness) -- sets the display brightness (0-255)<br>
+r,g,b are all in range 0-255<br>
+color is any of
+|Charachter|Color |
+|----------|------|
+|r         |Red   |
+|b         |Blue  |
+|p         |Purple|
+|0         |Clear |
+dir is any of
+|Charachter|Direction|
+|----------|---------|
+|l         |Left     |
+|r         |Right    |
+|u         |Up       |
+|d         |Down     |
+
+Hz is Times per second so 1Hz is 1 time per second
+
 send_command(self,command,acked) -- run the tello command `command` and if it has to be acknowledged, ***SHOULD NOT BE USED UNLESS YOU READ THE SDK USER GUIDE***<br>
-wifi(...) ***SHOULD NEVER BE USED***, only use it if told to by a instructor<br>
-(not showing inputs because we dont know how to reset them . . .)
 
 the initiliased Tello class also has a few attributes
 `Tello.state` a [state](#state) class containing a ton of data about the drone
